@@ -68,7 +68,9 @@ class Model(object):
 	
 	print('[*] Building model')
 	self.images = tf.placeholder(tf.float32, [None, 28, 28, 1], 'images')
-	self.mean, self.log_var = self.EncoderDecoder(self.images, is_training = self.mode=='train')
+	# when modeling aleatoric uncertainty, dropout is always off. Instead, we perform MAP inference using loss attenuation
+	# self.mean, self.log_var = self.EncoderDecoder(self.images, is_training = self.mode=='train')
+	self.mean, self.log_var = self.EncoderDecoder(self.images)
 
 	# loss
 	self.loss1 = tf.reduce_mean( tf.exp(-self.log_var) *tf.square( (self.mean-self.images) ) )
