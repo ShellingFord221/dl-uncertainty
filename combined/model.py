@@ -65,17 +65,23 @@ class Model(object):
 	
 	print('[*] Building model')
 	self.images = tf.placeholder(tf.float32, [None, 28, 28, 1], 'images')
+	
+	# when modeling both epistemic uncertainty and aleatoric undertainty, we use dropout as well as loss attenuation
 	self.rec_images, self.log_var = self.EncoderDecoder(self.images)
 	
 	# sample N sub-nets and average
 	if self.mode == 'test':
 	    self.rec_images = tf.expand_dims(self.rec_images,0)
+	    self.log_var = tf.expand_dims(self.log_var, 0)
 	    for i in range(self.test_trials):
-		self.rec_images = tf.concat([self.rec_images, tf.expand_dims( self.EncoderDecoder(self.images, reuse=True), 0)[0] ], axis=0 )
+		self.rec_images1, self.log_var1 = self.EncoderDecoder(self.images, reuse=True)
+                self.rec_images = tf.concat([self.rec_images, tf.expand_dims(self.rec_images1, 0)[0]], axis=0)
+                self.log_var = tf.concat([self.log_var, tf.expand_dims(self.log_var1, 0)[0]], axis=0)
 	    self.mean , self.var = tf.nn.moments(self.rec_images, axes=[0])
+	    self.log_var2 = tf.reduce_mean(self.log_var, axis=0)
 	    
 	    # 1 forward pass with no dropout for aleatoric_uncertainty
-	    self.rec_images2, self.log_var2 = self.EncoderDecoder(self.images, reuse=True, is_training=False)
+	    # self.rec_images2, self.log_var2 = self.EncoderDecoder(self.images, reuse=True, is_training=False)
 	    
 	    #normalize variances
 	    self.var2 = tf.exp(self.log_var2)
@@ -87,18 +93,18 @@ class Model(object):
 	    
 	    # summary op
             image_summary = tf.summary.image('images', self.images)
-            rec_image_summary = tf.summary.image('rec_images', self.rec_images2)
-            mean_image_summary = tf.summary.image('rec_mean_images', self.mean)
+            rec_image_summary = tf.summary.image('rec_images', self.mean)
+            # mean_image_summary = tf.summary.image('rec_mean_images', self.mean)
             aleatoric_summary = tf.summary.image('aleatoric_uncertainty', self.var2)
             epistemic_summary = tf.summary.image('epistemic_uncertaintiy', self.var)
-            var_summary = tf.summary.image('reconstruction error (L2)', tf.square(self.rec_images2 - self.mean))
+            var_summary = tf.summary.image('reconstruction error (L2)', tf.square(self.mean - self.images))
 	    #~ scaled_var_summary = tf.summary.image('scaled reconstruction error (L2/var)', tf.square(self.rec_images2 - self.images)/self.var2 )
 	    
 	    self.summary_op = tf.summary.merge([image_summary, \
 						rec_image_summary, \
 						aleatoric_summary, \
 						epistemic_summary, \
-                        mean_image_summary,\
+                       #  mean_image_summary,\
 						var_summary])
 						#~ scaled_var_summary])
 
