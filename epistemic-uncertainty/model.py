@@ -55,42 +55,45 @@ class Model(object):
 		    
     def build_model(self):
 	
-	print('[*] Building model')
-	self.images = tf.placeholder(tf.float32, [None, 28, 28, 1], 'images')
-	self.rec_images = self.EncoderDecoder(self.images)
-	
-	# sample N sub-nets and average
-	if self.mode == 'test':
-	    self.rec_images = tf.expand_dims(self.rec_images,0)
-	    for i in range(self.test_trials):
-		self.rec_images = tf.concat([self.rec_images, tf.expand_dims( self.EncoderDecoder(self.images, reuse=True), 0) ], axis=0 )
-	    _, self.var = tf.nn.moments(self.rec_images, axes=[0])
-	
-	    self.rec_images1 = self.EncoderDecoder(self.images, is_training=False, reuse=True)
+    	print('[*] Building model')
+    	self.images = tf.placeholder(tf.float32, [None, 28, 28, 1], 'images')
 
-	    # summary op
-	    image_summary = tf.summary.image('images', self.images)
-	    rec_image_summary = tf.summary.image('rec_images', self.rec_images1)
-	    var_summary = tf.summary.image('epistemic_uncertaintiy', self.var)
-	    
-	    self.summary_op = tf.summary.merge([image_summary, \
-						rec_image_summary, \
-						var_summary]
-						)
-	
-	if self.mode == 'train':
-	    # loss
-	    self.loss = tf.reduce_mean( tf.square( self.rec_images - self.images ) ) 
-	    # training stuff
-	    self.optimizer = tf.train.AdamOptimizer(self.learning_rate) 
-	    self.train_op = slim.learning.create_train_op(self.loss, self.optimizer)
-	
-	    # summary op
-	    loss_summary = tf.summary.scalar('loss', self.loss)
-	    image_summary = tf.summary.image('images', self.images)
-	    rec_image_summary = tf.summary.image('rec_images', self.rec_images)
-	    
-	    self.summary_op = tf.summary.merge([loss_summary, \
-						image_summary, \
-						rec_image_summary])
+    	# when modeling epistemic uncertainty, dropout is always on
+    	self.rec_images = self.EncoderDecoder(self.images)
+
+    	if self.mode == 'train':
+		# loss
+        	self.loss = tf.reduce_mean(tf.square(self.rec_images - self.images))
+        	# training stuff
+        	self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        	self.train_op = slim.learning.create_train_op(self.loss, self.optimizer)
+
+        	# summary op
+        	loss_summary = tf.summary.scalar('loss', self.loss)
+        	image_summary = tf.summary.image('images', self.images)
+        	rec_image_summary = tf.summary.image('rec_images', self.rec_images)
+
+        	self.summary_op = tf.summary.merge([loss_summary, \
+                                            	    image_summary, \
+                                            	    rec_image_summary])
+
+    	# sample N sub-nets and average
+    	if self.mode == 'test':
+        	self.rec_images = tf.expand_dims(self.rec_images, 0)
+        	for i in range(self.test_trials):
+            		self.rec_images = tf.concat([self.rec_images, tf.expand_dims(self.EncoderDecoder(self.images, reuse=True), 0)], axis=0)
+        	self.mean, self.var = tf.nn.moments(self.rec_images, axes=[0])
+
+        	# self.rec_images1 = self.EncoderDecoder(self.images, is_training=False, reuse=True)
+
+        	# summary op
+        	image_summary = tf.summary.image('images', self.images)
+        	# though the result may not be that good, I insist that it should be the average of the sampled outputs according to MC theory
+        	# rec_image_summary = tf.summary.image('rec_images', self.rec_images1)
+        	rec_image_summary = tf.summary.image('rec_images', self.mean)
+        	var_summary = tf.summary.image('epistemic_uncertaintiy', self.var)
+
+        	self.summary_op = tf.summary.merge([image_summary, \
+                                            	    rec_image_summary, \
+                                            	    var_summary])
     
